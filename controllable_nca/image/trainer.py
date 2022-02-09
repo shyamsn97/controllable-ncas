@@ -44,7 +44,7 @@ class ControllableNCAImageTrainer(NCATrainer):
 
         self.optimizer = torch.optim.Adam(self.nca.parameters(), lr=lr)
         self.lr_sched = torch.optim.lr_scheduler.MultiStepLR(
-            self.optimizer, [2000], 0.3
+            self.optimizer, [5000], 0.3
         )
 
     def to_alpha(self, x):
@@ -114,8 +114,10 @@ class ControllableNCAImageTrainer(NCATrainer):
 
     def train_batch(self, batch, targets):
         num_steps = random.randint(self.min_steps, self.max_steps)
-        target_images, _ = targets[0], targets[1]
-        batch = self.nca.grow(batch, num_steps=num_steps, goal=target_images)
+        target_images, goals = targets[0], targets[1]
+        if goals is None:
+            goals = target_images
+        batch = self.nca.grow(batch, num_steps=num_steps, goal=goals)
         loss = self.loss(batch, target_images).mean()
         self.optimizer.zero_grad()
         loss.backward()

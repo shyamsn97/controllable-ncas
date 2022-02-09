@@ -17,13 +17,11 @@ class UpdateNet(torch.nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.out = torch.nn.Sequential(
-            torch.nn.Conv2d(self.in_channels, 128, 1),
+            torch.nn.Conv2d(self.in_channels, 64, 1),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(128, 128, 1),
+            torch.nn.Conv2d(64, 64, 1),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(128, 128, 1),
-            torch.nn.ReLU(),
-            torch.nn.Conv2d(128, self.out_channels, 1, bias=False),
+            torch.nn.Conv2d(64, self.out_channels, 1, bias=False),
         )
 
         def init_weights(m):
@@ -43,6 +41,7 @@ class ControllableImageNCA(torch.nn.Module):
     def __init__(
         self,
         target_shape: Tuple[int] = (3, 64, 64),
+        encoder: torch.nn.Module = None,
         num_hidden_channels=16,
         use_living_channel: bool = True,
         living_channel_dim: Optional[int] = None,
@@ -85,13 +84,15 @@ class ControllableImageNCA(torch.nn.Module):
             self.num_channels * 3, self.num_channels, self.zero_bias
         )
 
-        self.image_encoder = build_conv2d_net(
-            target_shape[0],
-            self.num_hidden_channels,
-            target_shape[-1],
-            1,
-            hidden_dims=64,
-        )
+        self.encoder = encoder
+        if self.encoder is None:
+            self.encoder = build_conv2d_net(
+                target_shape[0],
+                self.num_hidden_channels,
+                target_shape[-1],
+                1,
+                hidden_dims=32,
+            )
 
     def generate_seed(self, num_seeds, device: Optional[torch.device] = None):
         if device is not None:
@@ -156,7 +157,7 @@ class ControllableImageNCA(torch.nn.Module):
 
     def grow(self, x: torch.Tensor, num_steps: int, goal: torch.Tensor) -> torch.Tensor:
         padded_goal_encoding = F.pad(
-            self.image_encoder(goal).view(x.size(0), -1),
+            self.encoder(goal).view(x.size(0), -1),
             (self.num_channels - self.num_hidden_channels, 0),
         )  # pad initial with zeros
         goal_encoding = padded_goal_encoding.view(

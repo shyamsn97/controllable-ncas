@@ -23,15 +23,12 @@ class EmojiDataset(MultiClass2DDataset):
         "0039",  # 9
     ]
 
-    def __init__(self, image_size=64):
+    def __init__(self, image_size=64, use_one_hot: bool = False):
         emojis = torch.stack(
             [load_emoji(e, image_size) for e in EmojiDataset.EMOJI], dim=0
         )
         targets = torch.arange(emojis.size(0))
-        super(EmojiDataset, self).__init__(emojis, targets)
-        self.digits = torch.stack(
-            [load_emoji(None, image_size, code=e) for e in EmojiDataset.digits], dim=0
-        )
+        super(EmojiDataset, self).__init__(emojis, targets, use_one_hot)
 
     def visualize(self, idx=0):
         self.plot_img(self.x[idx : idx + 1])

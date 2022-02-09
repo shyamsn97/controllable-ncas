@@ -12,12 +12,12 @@ from einops import rearrange  # noqa
 def load_image(url, size):
     r = requests.get(url)
     img = PIL.Image.open(io.BytesIO(r.content))
-    img.thumbnail((40, 40), PIL.Image.ANTIALIAS)
+    img.thumbnail((32, 32), PIL.Image.ANTIALIAS)
     img = np.float32(img) / 255.0
     # premultiply RGB by Alpha
     img[..., :3] *= img[..., 3:]
     # pad to self.h, self.h
-    diff = size - 40
+    diff = size - 32
     img = torch.tensor(img).permute(2, 0, 1)
     img = torch.nn.functional.pad(
         img, [diff // 2, diff // 2, diff // 2, diff // 2], mode="constant", value=0
