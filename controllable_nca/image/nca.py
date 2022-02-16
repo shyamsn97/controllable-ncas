@@ -3,7 +3,7 @@ from typing import Optional, Tuple  # noqa
 import torch
 import torch.nn.functional as F
 
-from controllable_nca.utils import build_conv2d_net
+from controllable_nca.utils import build_conv2d_net  # noqa
 
 
 class UpdateNet(torch.nn.Module):
@@ -85,14 +85,6 @@ class ControllableImageNCA(torch.nn.Module):
         )
 
         self.encoder = encoder
-        if self.encoder is None:
-            self.encoder = build_conv2d_net(
-                target_shape[0],
-                self.num_hidden_channels,
-                target_shape[-1],
-                1,
-                hidden_dims=32,
-            )
 
     def generate_seed(self, num_seeds, device: Optional[torch.device] = None):
         if device is not None:
