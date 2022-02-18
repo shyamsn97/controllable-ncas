@@ -16,7 +16,7 @@ def to_numpy_rgb(x, use_rgb=False):
     )
 
 
-class ControllableNCAImageVisualizer:
+class MorphingImageVisualizer:
     def __init__(
         self,
         trainer,
@@ -38,22 +38,9 @@ class ControllableNCAImageVisualizer:
         self.canvas.on_mouse_down(self.handle_mouse_down)
         self.stopped = Event()
 
-        x = self.trainer.target_dataset.x
-        d = self.trainer.target_dataset.digits.to(trainer.device)
-        with torch.no_grad():
-            self.embeddings = (
-                self.trainer.nca.image_encoder(x)
-                .view(x.size(0), self.trainer.nca.num_channels, 1, 1)
-                .repeat(1, 1, x.size(-1), x.size(-1))
-            )
-            self.digit_embeddings = (
-                self.trainer.nca.image_encoder(d)
-                .view(x.size(0), self.trainer.nca.num_channels, 1, 1)
-                .repeat(1, 1, x.size(-1), x.size(-1))
-            )
-            self.embeddings = torch.cat([self.embeddings, self.digit_embeddings], dim=0)
-        print(self.embeddings.size())
-        self.current_embedding = self.embeddings[0:1]
+        self.current_embedding = self.trainer.nca.encode(
+            torch.tensor(0, device=self.trainer.device)
+        )
 
         self.device = self.trainer.device
         self.damage_radius = damage_radius
@@ -61,7 +48,9 @@ class ControllableNCAImageVisualizer:
 
         def button_fn(class_num):
             def start(btn):
-                self.current_embedding = self.embeddings[class_num : class_num + 1]
+                self.current_embedding = self.trainer.nca.encode(
+                    torch.tensor(class_num, device=self.trainer.device)
+                )
                 if self.stopped.isSet():
                     self.stopped.clear()
                     Thread(target=self.loop).start()
@@ -115,8 +104,8 @@ class ControllableNCAImageVisualizer:
             while not self.stopped.wait(0.02):  # the first call is in `interval` secs
                 # update_particle_locations()
                 self.draw_image(self.trainer.to_rgb(self.current_state))
-                self.current_state, self.current_embedding = self.trainer.nca(
-                    (self.current_state, self.current_embedding)
+                self.current_state = self.trainer.nca.grow(
+                    self.current_state, 1, self.current_embedding
                 )
 
     def visualize(self):

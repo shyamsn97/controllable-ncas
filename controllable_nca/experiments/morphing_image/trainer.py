@@ -7,18 +7,18 @@ import torch
 import torch.nn.functional as F
 import tqdm
 
-from controllable_nca.dataset import NCADataset
-from controllable_nca.image.nca import ControllableImageNCA
+from controllable_nca.experiments.morphing_image.emoji_dataset import EmojiDataset
+from controllable_nca.nca import ControllableNCA
 from controllable_nca.sample_pool import SamplePool
 from controllable_nca.trainer import NCATrainer
 from controllable_nca.utils import create_2d_circular_mask
 
 
-class ControllableNCAImageTrainer(NCATrainer):
+class MorphingImageNCATrainer(NCATrainer):
     def __init__(
         self,
-        nca: ControllableImageNCA,
-        target_dataset: NCADataset,
+        nca: ControllableNCA,
+        target_dataset: EmojiDataset,
         nca_steps=[48, 96],
         lr: float = 2e-3,
         pool_size: int = 512,
@@ -27,7 +27,7 @@ class ControllableNCAImageTrainer(NCATrainer):
         damage_radius: int = 3,
         device: Optional[torch.device] = None,
     ):
-        super(ControllableNCAImageTrainer, self).__init__(
+        super(MorphingImageNCATrainer, self).__init__(
             pool_size, num_damaged, log_base_path, device
         )
         self.target_dataset = target_dataset
@@ -46,19 +46,6 @@ class ControllableNCAImageTrainer(NCATrainer):
         self.lr_sched = torch.optim.lr_scheduler.MultiStepLR(
             self.optimizer, [5000], 0.3
         )
-
-    def to_alpha(self, x):
-        return torch.clamp(x[:, 3:4, :, :], 0.0, 1.0)  # 1.0
-
-    def to_rgb(self, x):
-        # assume rgb premultiplied by alpha
-        if self.rgb:
-            return torch.clamp(x[:, :3], 0.0, 1.0).detach().cpu().numpy()
-        rgb = x[:, :3, :, :]  # 0,0,0
-        a = self.to_alpha(x)  # 1.0
-        im = 1.0 - a + rgb  # (1-1+0) = 0, (1-0+0) = 1
-        im = torch.clamp(im, 0, 1)
-        return im.detach().cpu().numpy()
 
     def loss(self, x, targets):
         return F.mse_loss(
@@ -108,16 +95,15 @@ class ControllableNCAImageTrainer(NCATrainer):
 
     def sample_targets(self, sampled_indices):
         batch_len = len(sampled_indices)
-        num_targets = len(self.target_dataset)
-        random_indices = np.random.choice(num_targets, batch_len, replace=True)
+        num_goals = self.target_dataset.num_goals()
+        random_indices = np.random.choice(num_goals, batch_len, replace=True)
         return self.target_dataset[random_indices], random_indices
 
     def train_batch(self, batch, targets):
         num_steps = random.randint(self.min_steps, self.max_steps)
         target_images, goals = targets[0], targets[1]
-        if goals is None:
-            goals = target_images
-        batch = self.nca.grow(batch, num_steps=num_steps, goal=goals)
+        goal_encodings = self.nca.encode(torch.tensor(goals, device=self.device))
+        batch = self.nca.grow(batch, num_steps=num_steps, goal=goal_encodings)
         loss = self.loss(batch, target_images).mean()
         self.optimizer.zero_grad()
         loss.backward()
@@ -130,7 +116,6 @@ class ControllableNCAImageTrainer(NCATrainer):
         for n, W in self.nca.named_parameters():
             if W.grad is not None:
                 grad_dict["{}_grad".format(n)] = float(torch.sum(W.grad).item())
-
         return (
             batch.detach(),
             loss.item(),

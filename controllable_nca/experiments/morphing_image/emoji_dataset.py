@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import torch
 from einops import rearrange
 
-from controllable_nca.dataset import MultiClass2DDataset
+from controllable_nca.dataset import NCADataset
 from controllable_nca.utils import load_emoji, rgb
 
 
-class EmojiDataset(MultiClass2DDataset):
+class EmojiDataset(NCADataset):
     # EMOJI = '🦎😀💥'
     EMOJI = "🦎😀💥👁🐠🦋🐞🕸🥨🎄"
 
@@ -27,11 +27,32 @@ class EmojiDataset(MultiClass2DDataset):
         emojis = torch.stack(
             [load_emoji(e, image_size) for e in EmojiDataset.EMOJI], dim=0
         )
-        targets = torch.arange(emojis.size(0))
-        super(EmojiDataset, self).__init__(emojis, targets, use_one_hot)
+        self.emojis = emojis
+        self.num_samples = len(self)
+        self._target_size = self.emojis.size()[-3:]
+
+    def num_goals(self):
+        return self.emojis.size(0)
+
+    def __getitem__(self, idx):
+        if isinstance(idx, int):
+            return self.emojis[idx : idx + 1], idx
+        return self.emojis[idx], idx
+
+    def __len__(self):
+        return self.emojis.size(0)
+
+    def target_size(self):
+        if self._target_size is not None:
+            return self._target_size
+        self._target_size = self.emojis.size()[-3:]
+        return self._target_size
+
+    def to(self, device: torch.device):
+        self.emojis = self.emojis.to(device)
 
     def visualize(self, idx=0):
-        self.plot_img(self.x[idx : idx + 1])
+        self.plot_img(self.emojis[idx : idx + 1])
 
     def plot_img(self, img):
         with torch.no_grad():

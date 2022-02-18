@@ -1,10 +1,8 @@
 import math
-import random
 from datetime import datetime
 from typing import Any, Optional, Tuple  # noqa
 
 import torch
-import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from controllable_nca.sample_pool import SamplePool
@@ -19,6 +17,7 @@ class NCATrainer:
         device: Optional[torch.device] = None,
     ):
         self.pool_size = pool_size
+        self.pool = SamplePool(self.pool_size)
         self.num_damaged = num_damaged
 
         self.log_base_path = log_base_path
@@ -29,6 +28,19 @@ class NCATrainer:
         self.device = device
         if self.device is None:
             self.device = torch.device("cpu")
+
+    def to_alpha(self, x):
+        return torch.clamp(x[:, 3:4, :, :], 0.0, 1.0)  # 1.0
+
+    def to_rgb(self, x):
+        # assume rgb premultiplied by alpha
+        if self.rgb:
+            return torch.clamp(x[:, :3], 0.0, 1.0).detach().cpu().numpy()
+        rgb = x[:, :3, :, :]  # 0,0,0
+        a = self.to_alpha(x)  # 1.0
+        im = 1.0 - a + rgb  # (1-1+0) = 0, (1-0+0) = 1
+        im = torch.clamp(im, 0, 1)
+        return im.detach().cpu().numpy()
 
     def sample_batch(self, sampled_indices, sample_pool) -> Tuple[Any, Any]:
         """
@@ -70,34 +82,6 @@ class NCATrainer:
 
     def update_pool(self, idxs, outputs, targets):
         self.pool[idxs] = outputs
-
-    def train(self, batch_size, epochs, *args, **kwargs):
-        self.pool = SamplePool(self.pool_size)
-        bar = tqdm.tqdm(range(epochs))
-        for i in bar:
-            idxs = random.sample(range(len(self.pool)), batch_size)
-            batch = self.sample_batch(idxs, self.pool)
-            targets = self.sample_targets(idxs)
-            # Sort by loss, descending.
-            with torch.no_grad():
-                sort_idx = torch.argsort(
-                    self.sort_loss(batch, targets), descending=True
-                )
-                batch = batch[sort_idx]
-                # Replace the highest-loss sample with the seed.
-                batch[0] = self.nca.generate_seed(1)[0].to(self.device)
-                if self.num_damaged > 0:
-                    batch = self.damage(batch)
-            batch.requires_grad = True
-            # Perform training.
-            outputs, loss, metrics = self.train_batch(batch, targets)
-            # Place outputs back in the pool.
-            self.update_pool(idxs, outputs, targets)
-
-            bar.set_description(
-                "loss: {} -- log10_loss: {}".format(loss, math.log10(loss))
-            )
-            self.emit_metrics(i, batch, outputs, loss, metrics={})
 
     def visualize(self, *args, **kwargs):
         raise NotImplementedError("Visualize is not implemented!")
