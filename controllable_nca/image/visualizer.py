@@ -72,9 +72,6 @@ class ControllableNCAImageVisualizer:
         for i in range(len(self.trainer.target_dataset.EMOJI)):
             button_list.append(Button(description=self.trainer.target_dataset.EMOJI[i]))
             button_list[-1].on_click(button_fn(i))
-        for i in range(10, self.trainer.target_dataset.digits.size(0) + 10):
-            button_list.append(Button(description=str(i - 10)))
-            button_list[-1].on_click(button_fn(i))
 
         self.vbox = VBox(button_list)
 

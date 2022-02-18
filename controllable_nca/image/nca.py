@@ -17,11 +17,9 @@ class UpdateNet(torch.nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.out = torch.nn.Sequential(
-            torch.nn.Conv2d(self.in_channels, 64, 1),
+            torch.nn.Conv2d(self.in_channels, 128, 1),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(64, 64, 1),
-            torch.nn.ReLU(),
-            torch.nn.Conv2d(64, self.out_channels, 1, bias=False),
+            torch.nn.Conv2d(128, self.out_channels, 1, bias=False),
         )
 
         def init_weights(m):
@@ -144,7 +142,6 @@ class ControllableImageNCA(torch.nn.Module):
         post_life_mask = self.alive(x)
         life_mask = (pre_life_mask & post_life_mask).float()
         x = x * life_mask
-        x = torch.clamp(x, -10.0, 10.0)
         return x, goal_encoding
 
     def grow(
