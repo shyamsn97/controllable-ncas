@@ -160,7 +160,7 @@ class MovableEmojiNCATrainer(NCATrainer):
             idxs = random.sample(range(self.pool_size), batch_size)
 
             with torch.no_grad():
-                batch = self.sample_batch(idxs, self.pool, replace=4)
+                batch = self.sample_batch(idxs, self.pool, replace=batch_size // 6)
 
             # train center
             directions = [0] * batch_size
@@ -179,11 +179,11 @@ class MovableEmojiNCATrainer(NCATrainer):
                 small_targets,
                 loss,
                 metrics,
-            ) = self.train_batch(new_batch, directions, 32)
+            ) = self.train_batch(new_batch, directions, self.max_steps // 2)
 
             # take more steps
             substrates, med_steps_batch, med_targets, loss, metrics = self.train_batch(
-                small_steps_batch, directions, 32
+                small_steps_batch, directions, self.max_steps // 2
             )
 
             # take more steps
@@ -193,7 +193,7 @@ class MovableEmojiNCATrainer(NCATrainer):
                 large_targets,
                 loss,
                 metrics,
-            ) = self.train_batch(med_steps_batch, directions, 32)
+            ) = self.train_batch(med_steps_batch, directions, self.max_steps // 2)
 
             self.pool[idxs] = small_steps_batch
             self.lr_sched.step()

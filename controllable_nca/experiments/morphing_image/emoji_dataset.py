@@ -23,9 +23,10 @@ class EmojiDataset(NCADataset):
         "0039",  # 9
     ]
 
-    def __init__(self, image_size=64, use_one_hot: bool = False):
+    def __init__(self, image_size=64, thumbnail_size=40, use_one_hot: bool = False):
         emojis = torch.stack(
-            [load_emoji(e, image_size) for e in EmojiDataset.EMOJI], dim=0
+            [load_emoji(e, image_size, thumbnail_size) for e in EmojiDataset.EMOJI],
+            dim=0,
         )
         self.emojis = emojis
         self.num_samples = len(self)

@@ -28,7 +28,7 @@ def draw_in_grid(img, x=None, y=None, grid_size=64):
         min_x = x - center
         min_x_diff = 0 - min(0, min_x)
         max_x = x + center
-        max_x_diff = grid_size - max(64, max_x)
+        max_x_diff = grid_size - max(grid_size, max_x)
         min_x = min_x + max_x_diff + min_x_diff
         max_x = max_x + max_x_diff + min_x_diff
 
@@ -49,7 +49,7 @@ class MovableEmojiDataset(NCADataset):
         self.grid_size = grid_size
         self.image_size = image_size
         self.emoji = emoji
-        self.x = load_emoji(emoji, image_size).unsqueeze(0)
+        self.x = load_emoji(emoji, 40, image_size).unsqueeze(0)
 
     def draw(self, x=None, y=None, substrate=None):
         if substrate is None:

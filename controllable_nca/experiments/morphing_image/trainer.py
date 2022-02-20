@@ -134,7 +134,7 @@ class MorphingImageNCATrainer(NCATrainer):
             with torch.no_grad():
                 targets, random_indices = self.sample_targets(idxs)
                 batch = self.sample_batch(idxs, self.pool)
-                batch[: (batch_size // 3)] = self.nca.generate_seed(batch_size // 3).to(
+                batch[: (batch_size // 6)] = self.nca.generate_seed(batch_size // 6).to(
                     self.device
                 )
 
