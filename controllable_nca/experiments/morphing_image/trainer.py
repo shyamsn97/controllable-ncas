@@ -44,7 +44,7 @@ class MorphingImageNCATrainer(NCATrainer):
 
         self.optimizer = torch.optim.Adam(self.nca.parameters(), lr=lr)
         self.lr_sched = torch.optim.lr_scheduler.MultiStepLR(
-            self.optimizer, [5000], 0.3
+            self.optimizer, [2000], 0.3
         )
 
     def loss(self, x, targets):
@@ -102,7 +102,10 @@ class MorphingImageNCATrainer(NCATrainer):
     def train_batch(self, batch, targets):
         num_steps = random.randint(self.min_steps, self.max_steps)
         target_images, goals = targets[0], targets[1]
-        goal_encodings = self.nca.encode(torch.tensor(goals, device=self.device))
+        if self.nca.use_image_encoder:
+            goal_encodings = target_images
+        else:
+            goal_encodings = torch.tensor(goals, device=self.device)
         batch = self.nca.grow(batch, num_steps=num_steps, goal=goal_encodings)
         loss = self.loss(batch, target_images).mean()
         self.optimizer.zero_grad()
@@ -134,13 +137,13 @@ class MorphingImageNCATrainer(NCATrainer):
             with torch.no_grad():
                 targets, random_indices = self.sample_targets(idxs)
                 batch = self.sample_batch(idxs, self.pool)
-                batch[: (batch_size // 6)] = self.nca.generate_seed(batch_size // 6).to(
+                batch[: (batch_size // 3)] = self.nca.generate_seed(batch_size // 3).to(
                     self.device
                 )
 
             outputs, loss, metrics = self.train_batch(batch, targets)
             # train more
-            outputs, loss, metrics = self.train_batch(outputs, targets)
+            # outputs, loss, metrics = self.train_batch(outputs, targets)
             # Place outputs back in the pool.
             self.update_pool(idxs, outputs, targets)
             description = "--".join(["{}:{}".format(k, metrics[k]) for k in metrics])

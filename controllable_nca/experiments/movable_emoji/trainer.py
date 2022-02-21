@@ -128,8 +128,10 @@ class MovableEmojiNCATrainer(NCATrainer):
 
         substrates = torch.stack(substrates, dim=0).squeeze()
         targets = torch.stack(targets, dim=0).squeeze().to(self.device)
-        goals = self.nca.encode(torch.stack(goals, dim=0).squeeze().to(self.device))
-
+        if self.nca.use_image_encoder:
+            goals = targets
+        else:
+            goals = torch.stack(goals, dim=0).squeeze().to(self.device)
         substrates = self.nca.grow(substrates, num_steps=num_steps, goal=goals)
 
         loss = self.loss(substrates, targets).mean()
