@@ -110,6 +110,7 @@ class MorphingImageNCATrainer(NCATrainer):
         loss = self.loss(batch, target_images).mean()
         self.optimizer.zero_grad()
         loss.backward()
+        # torch.nn.utils.clip_grad_norm_(self.nca.parameters(), 1.0)
         for p in self.nca.parameters():
             if p.grad is not None:
                 p.grad /= torch.norm(p.grad) + 1e-10
@@ -143,7 +144,7 @@ class MorphingImageNCATrainer(NCATrainer):
 
             outputs, loss, metrics = self.train_batch(batch, targets)
             # train more
-            # outputs, loss, metrics = self.train_batch(outputs, targets)
+            outputs, loss, metrics = self.train_batch(outputs, targets)
             # Place outputs back in the pool.
             self.update_pool(idxs, outputs, targets)
             description = "--".join(["{}:{}".format(k, metrics[k]) for k in metrics])

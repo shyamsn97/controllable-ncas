@@ -13,9 +13,19 @@ class Encoder(nn.Module):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding = Embedding(num_embeddings, 32)
-        self.encoder = torch.nn.Sequential(
-            nn.Linear(32, 32), nn.ReLU(), nn.Linear(32, out_channels, bias=False)
+        self.encoder = nn.Sequential(
+            nn.Linear(32, 32),
+            nn.ReLU(),
+            nn.Linear(32, out_channels, bias=False),
         )
+
+        def init_weights(m):
+            if isinstance(m, nn.Linear):
+                if getattr(m, "bias", None) is not None:
+                    torch.nn.init.zeros_(m.bias)
+
+        # with torch.no_grad():
+        #     self.apply(init_weights)
 
     def forward(self, indices):
         embeddings = self.encoder(self.embedding(indices))
@@ -159,7 +169,8 @@ class ControllableNCA(torch.nn.Module):
         ).float()
 
     def update(self, x, goal_encoding, pre_life_mask):
-        perceive = self.perception_net(x + goal_encoding * pre_life_mask)
+        x = x + goal_encoding * pre_life_mask
+        perceive = self.perception_net(x)
         out = self.update_net(perceive)
         return out
 
@@ -182,22 +193,26 @@ class ControllableNCA(torch.nn.Module):
     def grow(
         self, x: torch.Tensor, num_steps: int, goal: torch.Tensor = None
     ) -> torch.Tensor:
-        if goal is not None:
-            goal_encoding = self.encode(goal)
-            if goal_encoding.size(-1) == self.num_hidden_channels:
-                goal_encoding = F.pad(
-                    goal_encoding.view(x.size(0), -1),
-                    (self.num_channels - self.num_hidden_channels, 0),
-                )  # pad initial with zeros
-            goal_encoding = goal_encoding.view(
-                x.size(0), self.num_channels, 1, 1
-            ).repeat(1, 1, x.size(-1), x.size(-1))
-        else:
-            goal_encoding = torch.zeros(
-                x.size(0), self.num_channels, x.size(-1), x.size(-1), device=x.device
-            )
         for _ in range(num_steps):
-            x, goal_encoding = self.forward((x, goal_encoding))
+            if goal is not None:
+                goal_encoding = self.encode(goal)
+                if goal_encoding.size(-1) == self.num_hidden_channels:
+                    goal_encoding = F.pad(
+                        goal_encoding.view(x.size(0), -1),
+                        (self.num_channels - self.num_hidden_channels, 0),
+                    )  # pad initial with zeros
+                goal_encoding = goal_encoding.view(
+                    x.size(0), self.num_channels, 1, 1
+                ).repeat(1, 1, x.size(-1), x.size(-1))
+            else:
+                goal_encoding = torch.zeros(
+                    x.size(0),
+                    self.num_channels,
+                    x.size(-1),
+                    x.size(-1),
+                    device=x.device,
+                )
+            x, _ = self.forward((x, goal_encoding))
         return x
 
     def save(self, path: str):
