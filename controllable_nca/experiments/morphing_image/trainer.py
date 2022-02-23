@@ -44,7 +44,7 @@ class MorphingImageNCATrainer(NCATrainer):
 
         self.optimizer = torch.optim.Adam(self.nca.parameters(), lr=lr)
         self.lr_sched = torch.optim.lr_scheduler.MultiStepLR(
-            self.optimizer, [2000], 0.3
+            self.optimizer, [2000], gamma=0.1
         )
 
     def loss(self, x, targets):
@@ -95,25 +95,25 @@ class MorphingImageNCATrainer(NCATrainer):
 
     def sample_targets(self, sampled_indices):
         batch_len = len(sampled_indices)
-        num_goals = self.target_dataset.num_goals()
-        random_indices = np.random.choice(num_goals, batch_len, replace=True)
+        num_targets = len(self.target_dataset)
+        random_indices = np.random.choice(num_targets, batch_len, replace=True)
         return self.target_dataset[random_indices], random_indices
 
     def train_batch(self, batch, targets):
         num_steps = random.randint(self.min_steps, self.max_steps)
         target_images, goals = targets[0], targets[1]
         if self.nca.use_image_encoder:
-            goal_encodings = target_images
+            goals = target_images
         else:
-            goal_encodings = torch.tensor(goals, device=self.device)
-        batch = self.nca.grow(batch, num_steps=num_steps, goal=goal_encodings)
+            goals = torch.tensor(goals, device=self.device).squeeze()
+        batch = self.nca.grow(batch, num_steps=num_steps, goal=goals)
         loss = self.loss(batch, target_images).mean()
         self.optimizer.zero_grad()
         loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.nca.parameters(), 1.0)
-        for p in self.nca.parameters():
-            if p.grad is not None:
-                p.grad /= torch.norm(p.grad) + 1e-10
+        torch.nn.utils.clip_grad_norm_(self.nca.parameters(), 5.0)
+        # for p in self.nca.parameters():
+        #     if p.grad is not None:
+        #         p.grad /= torch.norm(p.grad) + 1e-10
         self.optimizer.step()
         self.lr_sched.step()
         grad_dict = {}

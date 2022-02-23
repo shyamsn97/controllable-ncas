@@ -9,6 +9,7 @@ from controllable_nca.utils import load_emoji, rgb
 class EmojiDataset(NCADataset):
     # EMOJI = '🦎😀💥'
     EMOJI = "🦎😀💥👁🐠🦋🐞🕸🥨🎄"
+    # EMOJI = "🦎😀👁🕸🥨🎄"
 
     digits = [
         "0030",  # 0
@@ -23,12 +24,13 @@ class EmojiDataset(NCADataset):
         "0039",  # 9
     ]
 
-    def __init__(self, image_size=64, thumbnail_size=40, use_one_hot: bool = False):
+    def __init__(self, image_size=64, thumbnail_size=32, use_one_hot: bool = False):
         emojis = torch.stack(
             [load_emoji(e, image_size, thumbnail_size) for e in EmojiDataset.EMOJI],
             dim=0,
         )
         self.emojis = emojis
+        self.targets = torch.arange(emojis.size(0))
         self.num_samples = len(self)
         self._target_size = self.emojis.size()[-3:]
 
@@ -37,8 +39,8 @@ class EmojiDataset(NCADataset):
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
-            return self.emojis[idx : idx + 1], idx
-        return self.emojis[idx], idx
+            return self.emojis[idx : idx + 1].clone(), idx
+        return self.emojis[idx].clone(), idx
 
     def __len__(self):
         return self.emojis.size(0)

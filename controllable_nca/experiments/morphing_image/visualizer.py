@@ -27,7 +27,7 @@ class MorphingImageVisualizer:
     ):
         self.trainer = trainer
         self.current_state = None
-        self.current_embedding = None
+        self.current_goal = None
 
         self.image_size = image_size
         self.rgb = rgb
@@ -38,9 +38,7 @@ class MorphingImageVisualizer:
         self.canvas.on_mouse_down(self.handle_mouse_down)
         self.stopped = Event()
 
-        self.current_embedding = self.trainer.nca.encode(
-            torch.tensor(0, device=self.trainer.device)
-        )
+        self.current_goal = torch.tensor(0, device=self.trainer.device)
 
         self.device = self.trainer.device
         self.damage_radius = damage_radius
@@ -48,9 +46,7 @@ class MorphingImageVisualizer:
 
         def button_fn(class_num):
             def start(btn):
-                self.current_embedding = self.trainer.nca.encode(
-                    torch.tensor(class_num, device=self.trainer.device)
-                )
+                self.current_goal = torch.tensor(class_num, device=self.trainer.device)
                 if self.stopped.isSet():
                     self.stopped.clear()
                     Thread(target=self.loop).start()
@@ -105,7 +101,7 @@ class MorphingImageVisualizer:
                 # update_particle_locations()
                 self.draw_image(self.trainer.to_rgb(self.current_state))
                 self.current_state = self.trainer.nca.grow(
-                    self.current_state, 1, self.current_embedding
+                    self.current_state, 1, self.current_goal
                 )
 
     def visualize(self):
