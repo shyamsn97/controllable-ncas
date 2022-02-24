@@ -13,7 +13,7 @@ from controllable_nca.sample_pool import SamplePool
 from controllable_nca.trainer import NCATrainer
 
 
-class MovableEmojiNCATrainer(NCATrainer):
+class LocationGuidedEmojiNCATrainer(NCATrainer):
     def __init__(
         self,
         nca: ControllableNCA,
@@ -26,10 +26,11 @@ class MovableEmojiNCATrainer(NCATrainer):
         damage_radius: int = 3,
         device: Optional[torch.device] = None,
     ):
-        super(MovableEmojiNCATrainer, self).__init__(
+        super(LocationGuidedEmojiNCATrainer, self).__init__(
             pool_size, num_damaged, log_base_path, device
         )
         self.target_dataset = target_dataset
+        self.grid_size = self.target_dataset.grid_size
         self.target_size = self.target_dataset.target_size()
 
         self.nca = nca
@@ -62,9 +63,8 @@ class MovableEmojiNCATrainer(NCATrainer):
         Returns:
             Tuple[Any, Any]: [description]
         """
-        default_coords = (
-            self.target_dataset.grid_size // 2,
-            self.target_dataset.grid_size // 2,
+        default_coords = np.array(
+            [0.5,0.5]
         )
         if sample_pool is not None:
             batch = sample_pool[sampled_indices]
@@ -85,53 +85,34 @@ class MovableEmojiNCATrainer(NCATrainer):
             batch[-i] = (self.nca.generate_seed(1)[0].to(self.device), default_coords)
         return batch
 
-    def sample_targets(self, batch_coords, directions, steps):
-        out_targets = []
-        goals = []
-        out_coords = []
-
-        for coords, direction, num_steps in zip(batch_coords, directions, steps):
-            if direction == 0:
-                # stay in place
-                new_coords = coords
-            if direction == 1:
-                # left
-                new_coords = (coords[0] - (num_steps // 8), coords[1])
-            if direction == 2:
-                # right
-                new_coords = (coords[0] + (num_steps // 8), coords[1])
-            if direction == 3:
-                # up
-                new_coords = (coords[0], coords[1] - (num_steps // 8))
-            if direction == 4:
-                # down
-                new_coords = (coords[0], coords[1] + (num_steps // 8))
-
-            target, new_coords = self.target_dataset.draw(new_coords[0], new_coords[1])
-
-            goals.append(torch.tensor(direction, device=self.device))
-            out_coords.append(new_coords)
-            out_targets.append(target)
-
-        return out_coords, out_targets, goals
-
-    def train_batch(self, batch, directions, num_steps):
+    def train_batch(self, batch, num_steps, sample_coords: bool = False):
         coords = []
         substrates = []
-        steps = [num_steps] * len(batch)
+
         for i in range(len(batch)):
             substrate, batch_coords = batch[i]
             substrates.append(substrate.to(self.device))
             coords.append(batch_coords)
 
-        new_coords, targets, goals = self.sample_targets(coords, directions, steps)
+        if sample_coords:
+            new_coords = np.random.random((len(coords),2))
+        else:
+            new_coords = coords
+
+        grid_coords = new_coords*self.grid_size
+        grid_coords = np.rint(grid_coords)
+        
+        targets = []
+        for coord in grid_coords:
+            target, _ = self.target_dataset.draw(coord[0], coord[1])
+            targets.append(target)
 
         substrates = torch.stack(substrates, dim=0).squeeze()
         targets = torch.stack(targets, dim=0).squeeze().to(self.device)
         if self.nca.use_image_encoder:
             goals = targets
         else:
-            goals = torch.stack(goals, dim=0).squeeze().to(self.device)
+            goals = torch.from_numpy(new_coords).to(self.device)
         substrates = self.nca.grow(substrates, num_steps=num_steps, goal=goals)
 
         loss = self.loss(substrates, targets).mean()
@@ -157,6 +138,7 @@ class MovableEmojiNCATrainer(NCATrainer):
     def train(self, batch_size, epochs):
         bar = tqdm.tqdm(range(epochs))
         self.pool = SamplePool(self.pool_size)
+        center_coords = np.array([0.5, 0.5])
 
         for i in bar:
             idxs = random.sample(range(self.pool_size), batch_size)
@@ -165,37 +147,30 @@ class MovableEmojiNCATrainer(NCATrainer):
                 batch = self.sample_batch(idxs, self.pool, replace=2)
 
             # train center
-            directions = [0] * batch_size
             num_steps = np.random.randint(self.min_steps, self.max_steps)
             substrates, new_batch, center_targets, loss, metrics = self.train_batch(
-                batch, directions, num_steps
+                batch, num_steps, sample_coords=False
             )
 
-            # random directions
-            directions = np.random.randint(1, 5, batch_size)
-
             # take small steps
+            num_steps = np.random.randint(self.min_steps, self.max_steps)
             (
                 substrates,
                 small_steps_batch,
                 small_targets,
                 loss,
                 metrics,
-            ) = self.train_batch(new_batch, directions, self.max_steps // 2)
+            ) = self.train_batch(new_batch, num_steps, sample_coords=True)
 
             # take more steps
-            substrates, med_steps_batch, med_targets, loss, metrics = self.train_batch(
-                small_steps_batch, directions, self.max_steps // 2
-            )
-
-            # take more steps
+            num_steps = np.random.randint(self.min_steps, self.max_steps)
             (
                 substrates,
                 large_steps_batch,
                 large_targets,
                 loss,
                 metrics,
-            ) = self.train_batch(med_steps_batch, directions, self.max_steps // 2)
+            ) = self.train_batch(small_steps_batch, num_steps, sample_coords=False)
 
             self.pool[idxs] = large_steps_batch
             self.lr_sched.step()
@@ -206,7 +181,6 @@ class MovableEmojiNCATrainer(NCATrainer):
                 ("sampled_batch", batch, None),
                 ("centered", new_batch, center_targets),
                 ("small", small_steps_batch, small_targets),
-                ("med", med_steps_batch, med_targets),
                 ("large", large_steps_batch, large_targets),
             ]
             self.emit_metrics(i, outputs, metrics)

@@ -44,7 +44,7 @@ class MorphingImageNCATrainer(NCATrainer):
 
         self.optimizer = torch.optim.Adam(self.nca.parameters(), lr=lr)
         self.lr_sched = torch.optim.lr_scheduler.MultiStepLR(
-            self.optimizer, [5000], gamma=0.1
+            self.optimizer, [5000], gamma=0.3
         )
 
     def loss(self, x, targets):
@@ -107,15 +107,16 @@ class MorphingImageNCATrainer(NCATrainer):
         else:
             goals = torch.tensor(goals, device=self.device).squeeze()
         batch = self.nca.grow(batch, num_steps=num_steps, goal=goals)
+        clip_loss = torch.mean(batch - torch.clip(batch, -10.0, 10.0))
         loss = self.loss(batch, target_images).mean()
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.nca.parameters(), 5.0)
-        # for p in self.nca.parameters():
-        #     if p.grad is not None:
-        #         p.grad /= torch.norm(p.grad) + 1e-10
+        # torch.nn.utils.clip_grad_norm_(self.nca.parameters(), 100.0)
+        for p in self.nca.parameters():
+            if p.grad is not None:
+                p.grad /= torch.norm(p.grad) + 1e-10
         self.optimizer.step()
-        # self.lr_sched.step()
+        self.lr_sched.step()
         grad_dict = {}
         for n, W in self.nca.named_parameters():
             if W.grad is not None:
@@ -123,7 +124,12 @@ class MorphingImageNCATrainer(NCATrainer):
         return (
             batch.detach(),
             loss.item(),
-            {"loss": loss.item(), "log10loss": math.log10(loss.item()), **grad_dict},
+            {
+                "loss": loss.item(),
+                "log10loss": math.log10(loss.item() + 1e-5),
+                "clip_loss": clip_loss.item(),
+                **grad_dict,
+            },
         )
 
     def update_pool(self, idxs, outputs, targets):
@@ -134,7 +140,7 @@ class MorphingImageNCATrainer(NCATrainer):
         bar = tqdm.tqdm(range(epochs))
         for i in bar:
             idxs = random.sample(range(len(self.pool)), batch_size)
-            # Sort by loss, descending.
+
             with torch.no_grad():
                 targets, random_indices = self.sample_targets(idxs)
                 batch = self.sample_batch(idxs, self.pool)
