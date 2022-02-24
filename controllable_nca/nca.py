@@ -178,13 +178,15 @@ class ControllableNCA(torch.nn.Module):
         return x, goal_encoding
 
     def grow(self, x: torch.Tensor, num_steps: int, goal: torch.Tensor) -> torch.Tensor:
-        padded_goal_encoding = F.pad(
-            self.encoder(goal).view(x.size(0), -1),
-            (self.num_channels - self.num_hidden_channels, 0),
-        )  # pad initial with zeros
-        goal_encoding = padded_goal_encoding.view(
-            x.size(0), self.num_channels, 1, 1
-        ).repeat(1, 1, x.size(-1), x.size(-1))
+        goal_encoding = self.encoder(goal).view(x.size(0), -1)
+        if goal_encoding.size(-1) == self.num_hidden_channels:
+            goal_encoding = F.pad(
+                goal_encoding,
+                (self.num_channels - self.num_hidden_channels, 0),
+            )  # pad initial with zeros
+        goal_encoding = goal_encoding.view(x.size(0), self.num_channels, 1, 1).repeat(
+            1, 1, x.size(-1), x.size(-1)
+        )
         for _ in range(num_steps):
             x, goal_encoding = self.forward((x, goal_encoding))
         return x

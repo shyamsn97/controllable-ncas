@@ -162,7 +162,7 @@ class MovableEmojiNCATrainer(NCATrainer):
             idxs = random.sample(range(self.pool_size), batch_size)
 
             with torch.no_grad():
-                batch = self.sample_batch(idxs, self.pool, replace=batch_size // 6)
+                batch = self.sample_batch(idxs, self.pool, replace=2)
 
             # train center
             directions = [0] * batch_size

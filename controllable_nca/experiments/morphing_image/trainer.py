@@ -44,7 +44,7 @@ class MorphingImageNCATrainer(NCATrainer):
 
         self.optimizer = torch.optim.Adam(self.nca.parameters(), lr=lr)
         self.lr_sched = torch.optim.lr_scheduler.MultiStepLR(
-            self.optimizer, [2000], gamma=0.1
+            self.optimizer, [5000], gamma=0.1
         )
 
     def loss(self, x, targets):
@@ -115,7 +115,7 @@ class MorphingImageNCATrainer(NCATrainer):
         #     if p.grad is not None:
         #         p.grad /= torch.norm(p.grad) + 1e-10
         self.optimizer.step()
-        self.lr_sched.step()
+        # self.lr_sched.step()
         grad_dict = {}
         for n, W in self.nca.named_parameters():
             if W.grad is not None:
@@ -138,9 +138,7 @@ class MorphingImageNCATrainer(NCATrainer):
             with torch.no_grad():
                 targets, random_indices = self.sample_targets(idxs)
                 batch = self.sample_batch(idxs, self.pool)
-                batch[: (batch_size // 3)] = self.nca.generate_seed(batch_size // 3).to(
-                    self.device
-                )
+                batch[:2] = self.nca.generate_seed(2).to(self.device)
 
             outputs, loss, metrics = self.train_batch(batch, targets)
             # train more
