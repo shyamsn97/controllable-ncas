@@ -63,9 +63,7 @@ class LocationGuidedEmojiNCATrainer(NCATrainer):
         Returns:
             Tuple[Any, Any]: [description]
         """
-        default_coords = np.array(
-            [0.5,0.5]
-        )
+        default_coords = np.array([0.5, 0.5])
         if sample_pool is not None:
             batch = sample_pool[sampled_indices]
         else:
@@ -95,13 +93,13 @@ class LocationGuidedEmojiNCATrainer(NCATrainer):
             coords.append(batch_coords)
 
         if sample_coords:
-            new_coords = np.random.random((len(coords),2))
+            new_coords = np.random.random((len(coords), 2))
         else:
             new_coords = coords
 
-        grid_coords = new_coords*self.grid_size
+        grid_coords = new_coords * self.grid_size
         grid_coords = np.rint(grid_coords)
-        
+
         targets = []
         for coord in grid_coords:
             target, _ = self.target_dataset.draw(coord[0], coord[1])
@@ -138,7 +136,7 @@ class LocationGuidedEmojiNCATrainer(NCATrainer):
     def train(self, batch_size, epochs):
         bar = tqdm.tqdm(range(epochs))
         self.pool = SamplePool(self.pool_size)
-        center_coords = np.array([0.5, 0.5])
+        # center_coords = np.array([0.5, 0.5])
 
         for i in bar:
             idxs = random.sample(range(self.pool_size), batch_size)
