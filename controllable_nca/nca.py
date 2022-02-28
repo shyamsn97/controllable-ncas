@@ -1,9 +1,22 @@
 from typing import Optional, Tuple  # noqa
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn import Embedding
 
 from controllable_nca.utils import build_conv2d_net
+
+
+class Encoder(nn.Module):
+    def __init__(self, num_embeddings: int, out_channels: int):
+        super().__init__()
+        self.num_embeddings = num_embeddings
+        self.embedding = Embedding(num_embeddings, out_channels)
+
+    def forward(self, indices):
+        embeddings = self.embedding(indices)
+        return embeddings
 
 
 class UpdateNet(torch.nn.Module):
@@ -37,11 +50,13 @@ class UpdateNet(torch.nn.Module):
         return self.out(x)
 
 
-class ControllableImageNCA(torch.nn.Module):
+class ControllableNCA(torch.nn.Module):
     def __init__(
         self,
+        num_goals: int,
+        encoder: nn.Module = None,
+        use_image_encoder: bool = False,
         target_shape: Tuple[int] = (3, 64, 64),
-        encoder: torch.nn.Module = None,
         num_hidden_channels=16,
         use_living_channel: bool = True,
         living_channel_dim: Optional[int] = None,
@@ -50,6 +65,8 @@ class ControllableImageNCA(torch.nn.Module):
         zero_bias=True,
     ):
         super().__init__()
+        self.num_goals = num_goals
+
         self.target_shape = target_shape
         self.num_target_channels = self.target_shape[0]
 
@@ -83,16 +100,22 @@ class ControllableImageNCA(torch.nn.Module):
         self.update_net = UpdateNet(
             self.num_channels * 3, self.num_channels, self.zero_bias
         )
-
+        self.use_image_encoder = use_image_encoder
         self.encoder = encoder
-        if self.encoder is None:
-            self.encoder = build_conv2d_net(
-                target_shape[0],
-                self.num_hidden_channels,
-                target_shape[-1],
-                1,
-                hidden_dims=32,
-            )
+        if encoder is None:
+            if self.use_image_encoder:
+                self.encoder = build_conv2d_net(
+                    target_shape[0],
+                    self.num_hidden_channels,
+                    target_shape[-1],
+                    1,
+                    hidden_dims=64,
+                )
+            else:
+                self.encoder = Encoder(self.num_goals, self.num_hidden_channels)
+
+    def encode(self, goals: torch.Tensor):
+        return self.encoder(goals)
 
     def generate_seed(self, num_seeds, device: Optional[torch.device] = None):
         if device is not None:
@@ -125,7 +148,6 @@ class ControllableImageNCA(torch.nn.Module):
     def get_stochastic_update_mask(self, x):
         """
         Return stochastic update mask
-
         Args:
             x ([type]): [description]
         """
@@ -156,13 +178,15 @@ class ControllableImageNCA(torch.nn.Module):
         return x, goal_encoding
 
     def grow(self, x: torch.Tensor, num_steps: int, goal: torch.Tensor) -> torch.Tensor:
-        padded_goal_encoding = F.pad(
-            self.encoder(goal).view(x.size(0), -1),
-            (self.num_channels - self.num_hidden_channels, 0),
-        )  # pad initial with zeros
-        goal_encoding = padded_goal_encoding.view(
-            x.size(0), self.num_channels, 1, 1
-        ).repeat(1, 1, x.size(-1), x.size(-1))
+        goal_encoding = self.encoder(goal).view(x.size(0), -1)
+        if goal_encoding.size(-1) == self.num_hidden_channels:
+            goal_encoding = F.pad(
+                goal_encoding,
+                (self.num_channels - self.num_hidden_channels, 0),
+            )  # pad initial with zeros
+        goal_encoding = goal_encoding.view(x.size(0), self.num_channels, 1, 1).repeat(
+            1, 1, x.size(-1), x.size(-1)
+        )
         for _ in range(num_steps):
             x, goal_encoding = self.forward((x, goal_encoding))
         return x

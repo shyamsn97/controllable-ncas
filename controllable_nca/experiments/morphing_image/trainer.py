@@ -7,18 +7,18 @@ import torch
 import torch.nn.functional as F
 import tqdm
 
-from controllable_nca.dataset import NCADataset
-from controllable_nca.image.nca import ControllableImageNCA
+from controllable_nca.experiments.morphing_image.emoji_dataset import EmojiDataset
+from controllable_nca.nca import ControllableNCA
 from controllable_nca.sample_pool import SamplePool
 from controllable_nca.trainer import NCATrainer
 from controllable_nca.utils import create_2d_circular_mask
 
 
-class ControllableNCAImageTrainer(NCATrainer):
+class MorphingImageNCATrainer(NCATrainer):
     def __init__(
         self,
-        nca: ControllableImageNCA,
-        target_dataset: NCADataset,
+        nca: ControllableNCA,
+        target_dataset: EmojiDataset,
         nca_steps=[48, 96],
         lr: float = 2e-3,
         pool_size: int = 512,
@@ -27,7 +27,7 @@ class ControllableNCAImageTrainer(NCATrainer):
         damage_radius: int = 3,
         device: Optional[torch.device] = None,
     ):
-        super(ControllableNCAImageTrainer, self).__init__(
+        super(MorphingImageNCATrainer, self).__init__(
             pool_size, num_damaged, log_base_path, device
         )
         self.target_dataset = target_dataset
@@ -44,21 +44,8 @@ class ControllableNCAImageTrainer(NCATrainer):
 
         self.optimizer = torch.optim.Adam(self.nca.parameters(), lr=lr)
         self.lr_sched = torch.optim.lr_scheduler.MultiStepLR(
-            self.optimizer, [5000], 0.3
+            self.optimizer, [5000], gamma=0.3
         )
-
-    def to_alpha(self, x):
-        return torch.clamp(x[:, 3:4, :, :], 0.0, 1.0)  # 1.0
-
-    def to_rgb(self, x):
-        # assume rgb premultiplied by alpha
-        if self.rgb:
-            return torch.clamp(x[:, :3], 0.0, 1.0).detach().cpu().numpy()
-        rgb = x[:, :3, :, :]  # 0,0,0
-        a = self.to_alpha(x)  # 1.0
-        im = 1.0 - a + rgb  # (1-1+0) = 0, (1-0+0) = 1
-        im = torch.clamp(im, 0, 1)
-        return im.detach().cpu().numpy()
 
     def loss(self, x, targets):
         return F.mse_loss(
@@ -115,12 +102,16 @@ class ControllableNCAImageTrainer(NCATrainer):
     def train_batch(self, batch, targets):
         num_steps = random.randint(self.min_steps, self.max_steps)
         target_images, goals = targets[0], targets[1]
-        if goals is None:
+        if self.nca.use_image_encoder:
             goals = target_images
+        else:
+            goals = torch.tensor(goals, device=self.device).squeeze()
         batch = self.nca.grow(batch, num_steps=num_steps, goal=goals)
+        clip_loss = torch.mean(batch - torch.clip(batch, -10.0, 10.0))
         loss = self.loss(batch, target_images).mean()
         self.optimizer.zero_grad()
         loss.backward()
+        # torch.nn.utils.clip_grad_norm_(self.nca.parameters(), 100.0)
         for p in self.nca.parameters():
             if p.grad is not None:
                 p.grad /= torch.norm(p.grad) + 1e-10
@@ -130,11 +121,15 @@ class ControllableNCAImageTrainer(NCATrainer):
         for n, W in self.nca.named_parameters():
             if W.grad is not None:
                 grad_dict["{}_grad".format(n)] = float(torch.sum(W.grad).item())
-
         return (
             batch.detach(),
             loss.item(),
-            {"loss": loss.item(), "log10loss": math.log10(loss.item()), **grad_dict},
+            {
+                "loss": loss.item(),
+                "log10loss": math.log10(loss.item() + 1e-5),
+                "clip_loss": clip_loss.item(),
+                **grad_dict,
+            },
         )
 
     def update_pool(self, idxs, outputs, targets):
@@ -145,13 +140,11 @@ class ControllableNCAImageTrainer(NCATrainer):
         bar = tqdm.tqdm(range(epochs))
         for i in bar:
             idxs = random.sample(range(len(self.pool)), batch_size)
-            # Sort by loss, descending.
+
             with torch.no_grad():
                 targets, random_indices = self.sample_targets(idxs)
                 batch = self.sample_batch(idxs, self.pool)
-                batch[: (batch_size // 3)] = self.nca.generate_seed(batch_size // 3).to(
-                    self.device
-                )
+                batch[:2] = self.nca.generate_seed(2).to(self.device)
 
             outputs, loss, metrics = self.train_batch(batch, targets)
             # train more
