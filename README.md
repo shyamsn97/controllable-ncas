@@ -8,10 +8,9 @@
 <!-- [![Paper](https://img.shields.io/badge/paper-arxiv.2204.11674-B31B1B.svg)](https://arxiv.org/abs/2204.11674) -->
 
 <p float="left">
-  <img src="images/morphing.gif" width="500" />
-  <img src="images/locomotion_100.gif" width="800" /> 
+  <img src="images/morphing.gif" width="400" />
+  <img src="images/locomotion_100.gif" width="600" /> 
 </p>
-
 </div>
 
 
