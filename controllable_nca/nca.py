@@ -117,18 +117,25 @@ class ControllableNCA(torch.nn.Module):
     def encode(self, goals: torch.Tensor):
         return self.encoder(goals)
 
-    def generate_seed(self, num_seeds, device: Optional[torch.device] = None):
+    def generate_seed(
+        self,
+        num_seeds,
+        device: Optional[torch.device] = None,
+        size: Optional[int] = None,
+    ):
         if device is not None:
             device = torch.device("cpu")
+        if size is None:
+            size = self.image_size
         seed = torch.zeros(
             num_seeds,
             self.num_channels,
-            self.image_size,
-            self.image_size,
+            size,
+            size,
             device=device,
         )
         seed[
-            :, self.living_channel_dim :, self.image_size // 2, self.image_size // 2
+            :, self.living_channel_dim :, size // 2, size // 2
         ] = 1.0  # rgb=0, alpha=1 = black
         return seed
 
