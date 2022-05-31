@@ -211,4 +211,5 @@ author={Shyam Sudhakaran and Elias Najarro and Sebastian Risi},
 booktitle={From Cells to Societies: Collective Learning across Scales},
 year={2022},
 url={https://arxiv.org/abs/2205.06806}
+}
 ```
