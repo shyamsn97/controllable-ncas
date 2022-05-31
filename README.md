@@ -5,11 +5,14 @@
  
 # Goal-Guided Neural Cellular Automata: Learning to Control Self-Organising Systems
 
+[![Paper](https://img.shields.io/badge/paper-arxiv.2205.06806-B31B1B.svg)](https://arxiv.org/abs/2205.06806)
+
+
 <!-- [![Paper](https://img.shields.io/badge/paper-arxiv.2204.11674-B31B1B.svg)](https://arxiv.org/abs/2204.11674) -->
 
 <p float="left">
-  <img src="images/morphing.gif" width="300" />
-  <img src="images/locomotion_100.gif" width="500" /> 
+  <img src="images/morphing.gif" width="300" height="300"/>
+  <img src="images/locomotion_100.gif" width="400" height="300"/> 
 </p>
 </div>
 
@@ -201,6 +204,11 @@ nca.load("test.pt")
 If you use the code for academic or commecial use, please cite the associated paper:
 
 ```bibtex
-TO ADD
-
+@inproceedings{
+sudhakaran2022goalguided,
+title={Goal-Guided Neural Cellular Automata: Learning to Control Self-Organising Systems},
+author={Shyam Sudhakaran and Elias Najarro and Sebastian Risi},
+booktitle={From Cells to Societies: Collective Learning across Scales},
+year={2022},
+url={https://arxiv.org/abs/2205.06806}
 ```
